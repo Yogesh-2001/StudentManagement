@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System.ComponentModel.DataAnnotations;
+using System.Runtime.Serialization;
 
 namespace StudentManagement.Models
 {
@@ -13,5 +14,16 @@ namespace StudentManagement.Models
         [Range(20,40)]
         public int age { get; set; }
         
+    }
+    public class Employee
+    {
+        
+        public int Id { get; set; }
+     
+        public string Name { get; set; }
+      
+        public string Department { get; set; }
+     
+        public decimal Salary { get; set; }
     }
 }
