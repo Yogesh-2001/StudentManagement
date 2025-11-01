@@ -2,21 +2,25 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using StudentManagement.Models;
+using StudentManagement.Repository;
+using StudentManagement.Services;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace StudentManagement.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class PointOfInterestController : ControllerBase
     {
         private readonly string connectionString;
+        private readonly IPOIService poiservice;
 
-        public PointOfInterestController(IConfiguration configuration)
+        public PointOfInterestController(IConfiguration configuration, IPOIService _poiservice)
         {
             connectionString = configuration.GetConnectionString("DbConnectionString");
+            poiservice = _poiservice;
         }
         [HttpPost("create")]
         public async Task<ServiceResponse<string>> CreatePOI([FromBody] PoiRecord newPoiRecord)
@@ -113,6 +117,7 @@ namespace StudentManagement.Controllers
             }
         }
 
+        [HttpGet("get-poi")]
         public async Task<ServiceResponse<List<PoiRecord>>> GetPoiRecordsAsync()
         {
             var records = new List<PoiRecord>();
@@ -199,6 +204,45 @@ namespace StudentManagement.Controllers
            
         }
 
+        [HttpGet("poi/fields")]
+        public async Task<ActionResult<ServiceResponse<List<POIField>>>> GetFieldDetails(BasePOIRequest request)
+        {
+            if (string.IsNullOrEmpty(request.poiId))
+            {
+                return BadRequest(new ServiceResponse<POIField> { Success = false, Message = "poiId is required." });
+            }
+
+            // MobileNo is optional, so it is omitted from the required parameters here
+
+            ServiceResponse<List<POIField>> response = await poiservice.GetPoiFieldsAsync(request.poiId);
+
+            if (!response.Success)
+            {
+                return NotFound(response); // Or StatusCode(500, ...) if it's a server/DB error
+            }
+
+            return Ok(response);
+
+        }
+
+        [HttpPost("poi/submit")]
+        public async Task<ActionResult<ServiceResponse<object>>> SubmitPOI(SubmitPOIRequest request)
+        {
+            if (request == null || string.IsNullOrEmpty(request.poiId) || string.IsNullOrEmpty(request.mobileNo))
+            {
+                return BadRequest(new ServiceResponse<object> { Success = false, Message = "POI ID and Mobile Number are required." });
+            }
+
+            ServiceResponse<object> response = await poiservice.SubmitPoiAsync(request);
+
+            if (!response.Success)
+            {
+                return StatusCode(500, response);
+            }
+
+            return Ok(response.Data);
+
+        }
 
     }
 }

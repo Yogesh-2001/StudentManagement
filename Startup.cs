@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using StudentManagement.Repository;
+using StudentManagement.Services;
 using Swashbuckle.AspNetCore.Swagger;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Swashbuckle.AspNetCore.SwaggerUI;
@@ -33,7 +35,9 @@ namespace StudentManagement
         {
 
             services.AddControllers();
-           // services.AddSwaggerGen();
+            services.AddScoped<IPOIService,PoiService>();
+            services.AddScoped<IDashboardService,DashboardService>();
+            // services.AddSwaggerGen();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
