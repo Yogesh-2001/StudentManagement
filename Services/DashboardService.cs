@@ -18,6 +18,130 @@ namespace StudentManagement.Services
             connectionString = configuration.GetConnectionString("DbConnectionString");
         }
 
+        // --- Core Repository Method ---
+        public async Task<DashboardDataDto> GetDashboardDataAsync(string agentId)
+        {
+            var data = new DashboardDataDto { AssignedPOIs = new List<PoiDto>() };
+            var poiDictionary = new Dictionary<int, PoiDto>();
+
+            // SQL Server T-SQL Batch for multiple result sets
+            // NOTE: The table names and column names must match the SQL Server schema
+            var sql = @"
+            -- 1. Get Agent Header Data
+            SELECT AgentId, AgentName, DataCollectionLocation 
+            FROM Agents 
+            WHERE AgentId = @AgentId;
+
+            -- 2. Get Task Summary Counts
+            SELECT TaskStatus AS TaskName, COUNT(*) AS Count 
+            FROM POIS 
+            WHERE AgentId = @AgentId 
+            GROUP BY TaskStatus;
+
+            -- 3. Get POI and Subtask Data (JOINed)
+            SELECT
+                p.poiId, p.poiName, p.category, p.categoryId, p.taskPriority, p.taskStatus, 
+                p.progress, p.revisionRequired, p.contactNo, p.latitude, p.longitude, 
+                p.revisionMessage, s.iconUrl, s.text
+            FROM POIS p
+            LEFT JOIN Subtasks s ON p.PoiId = s.PoiId
+            WHERE p.AgentId = @AgentId
+            ORDER BY p.PoiId;
+        ";
+
+            using var connection = new SqlConnection(connectionString);
+            using var command = new SqlCommand(sql, connection);
+
+            // Add parameter for filtering by AgentId
+            command.Parameters.AddWithValue("@AgentId", agentId);
+
+            try
+            {
+                await connection.OpenAsync();
+                using var reader = await command.ExecuteReaderAsync();
+
+                // 1. Read Agent Data (First Result Set)
+                if (await reader.ReadAsync())
+                {
+                    data.AgentId = reader["AgentId"].ToString();
+                    data.AgentName = reader["AgentName"].ToString();
+                    data.DataCollectionLocation = reader["DataCollectionLocation"].ToString();
+                }
+                else
+                {
+                    // Agent not found
+                    return null;
+                }
+
+                // 2. Read Task Summary (Second Result Set)
+                if (await reader.NextResultAsync())
+                {
+                    data.TaskSummary = new List<TaskSummaryDto>();
+                    while (await reader.ReadAsync())
+                    {
+                        data.TaskSummary.Add(new TaskSummaryDto
+                        {
+                            TaskName = reader["TaskName"].ToString(),
+                            Count = Convert.ToInt32(reader["Count"])
+                        });
+                    }
+                }
+
+                // 3. Read POI and Subtask Data (Third Result Set)
+                if (await reader.NextResultAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        int poiId = Convert.ToInt32(reader["PoiId"]);
+
+                        // --- Hierarchical Mapping Logic ---
+
+                        // Check if POI is already mapped
+                        if (!poiDictionary.TryGetValue(poiId, out var poiEntry))
+                        {
+                            // Create new POI entry
+                            poiEntry = new PoiDto
+                            {
+                                PoiId = poiId,
+                                PoiName = reader["PoiName"].ToString(),
+                                Category = reader["Category"].ToString(),
+                                CategoryId = Convert.ToInt32(reader["CategoryId"]),
+                                TaskPriority = reader["TaskPriority"].ToString(),
+                                TaskStatus = reader["TaskStatus"].ToString(),
+                                Progress = Convert.ToInt32(reader["Progress"]),
+                                RevisionRequired = Convert.ToBoolean(reader["RevisionRequired"]),
+                                ContactNo = reader["ContactNo"].ToString(),
+                                Latitude = reader["Latitude"].ToString(),
+                                Longitude = reader["Longitude"].ToString(),
+                                // Handle potential DBNull for RevisionMessage
+                                RevisionMessage = reader["RevisionMessage"] as string,
+                            };
+                            poiDictionary.Add(poiId, poiEntry);
+                            data.AssignedPOIs.Add(poiEntry);
+                        }
+
+                        // Add subtask if text is not null (meaning a subtask exists for this row)
+                        if (reader["Text"] != DBNull.Value)
+                        {
+                            poiEntry.SubTasks.Add(new SubtaskDto
+                            {
+                                IconUrl = reader["IconUrl"].ToString(),
+                                Text = reader["Text"].ToString()
+                            });
+                        }
+                    }
+                }
+
+                return data;
+            }
+            catch (SqlException ex)
+            {
+                // Log the error (e.g., using ILogger)
+                Console.WriteLine($"SQL Error: {ex.Message}");
+                throw; // Re-throw or handle gracefully
+            }
+        }
+
         public async Task<ServiceResponse<MerchantDetail>> GetDashboardDetails(string mobileNo)
         {
             var response = new ServiceResponse<MerchantDetail>();

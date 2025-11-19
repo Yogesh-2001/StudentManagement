@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using StudentManagement.Models;
@@ -58,7 +59,60 @@ namespace StudentManagement.Controllers
             return Ok(response);
         }
 
-        
 
+        [HttpGet("dashboard/{agentId}")]
+        [ProducesResponseType(typeof(ServiceResponse<DashboardDataDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ServiceResponse<DashboardDataDto>), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ServiceResponse<DashboardDataDto>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetDashboardDetails(string agentId)
+        {
+            if (string.IsNullOrEmpty(agentId))
+            {
+                return BadRequest(new ServiceResponse<DashboardDataDto>
+                {
+                    Success = false,
+                    Message = "Agent ID cannot be empty.",
+                    Data = null
+                });
+            }
+
+            try
+            {
+                // Call the repository to fetch the structured data
+                var data = await dashboardService.GetDashboardDataAsync(agentId);
+
+                if (data == null)
+                {
+                    // Return 404 if the agent is valid but no data (or agent itself) was found
+                    return NotFound(new ServiceResponse<DashboardDataDto>
+                    {
+                        Success = false,
+                        Message = $"Dashboard data not found for agent ID: {agentId}",
+                        Data = null
+                    });
+                }
+
+                // Return 200 OK with the structured data
+                return Ok(new ServiceResponse<DashboardDataDto>
+                {
+                    Success = true,
+                    Message = "Dashboard data fetched successfully",
+                    Data = data
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log the exception here (e.g., using ILogger)
+                Console.WriteLine($"Error fetching dashboard for {agentId}: {ex.Message}");
+
+                // Return 500 Internal Server Error for unhandled exceptions (e.g., database connection issues)
+                return StatusCode(StatusCodes.Status500InternalServerError, new ServiceResponse<DashboardDataDto>
+                {
+                    Success = false,
+                    Message = "An internal server error occurred while processing your request.",
+                    Data = null
+                });
+            }
+        }
     }
 }
