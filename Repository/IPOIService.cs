@@ -1,4 +1,5 @@
-﻿using StudentManagement.Models;
+﻿using Newtonsoft.Json.Linq;
+using StudentManagement.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -9,5 +10,7 @@ namespace StudentManagement.Repository
         Task<ServiceResponse<List<POIField>>> GetPoiFieldsAsync(string poiId);
 
         Task<ServiceResponse<object>> SubmitPoiAsync(SubmitPOIRequest request);
+
+        Task<ServiceResponse<object>> InsertAgentAsync(string payload, int poid, int agentid);
     }
 }

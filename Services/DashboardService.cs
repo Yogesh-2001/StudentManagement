@@ -239,6 +239,88 @@ namespace StudentManagement.Services
             return response;
         }
 
+        public async Task<bool> CreatePoiAssignmentAsync(PoiAssignmentInputDto assignment)
+        {
+            // 1. POIS Insert SQL
+            var poiSql = @"
+        INSERT INTO POIS (PoiId, AgentId, PoiName, Category, CategoryId, TaskPriority, 
+                          TaskStatus, Progress, RevisionRequired, ContactNo, Latitude, Longitude)
+        VALUES (@PoiId, @AgentId, @PoiName, @Category, @CategoryId, @TaskPriority, 
+                @TaskStatus, @Progress, 0, @ContactNo, @Latitude, @Longitude);
+    ";
+
+            // 2. SUBTASKS Insert SQL
+            // Note: We assume SubtaskId is IDENTITY/AUTO_INCREMENT in the database
+            var subtaskSql = @"
+        INSERT INTO Subtasks (PoiId, IconUrl, Text)
+        VALUES (@PoiId, @IconUrl, @Text);
+    ";
+
+            using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+
+            // Start a transaction to ensure atomicity
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                // --- 1. Insert into POIS table ---
+                using (var command = new SqlCommand(poiSql, connection, transaction))
+                {
+                    // Add parameters for POIS table
+                    command.Parameters.AddWithValue("@PoiId", assignment.PoiId);
+                    command.Parameters.AddWithValue("@AgentId", assignment.AgentId);
+                    command.Parameters.AddWithValue("@PoiName", assignment.PoiName);
+                    command.Parameters.AddWithValue("@Category", assignment.Category);
+                    command.Parameters.AddWithValue("@CategoryId", assignment.CategoryId);
+                    command.Parameters.AddWithValue("@TaskPriority", assignment.TaskPriority);
+                    command.Parameters.AddWithValue("@TaskStatus", assignment.TaskStatus);
+                    command.Parameters.AddWithValue("@Progress", assignment.Progress);
+                    command.Parameters.AddWithValue("@ContactNo", assignment.ContactNo);
+                    command.Parameters.AddWithValue("@Latitude", assignment.Latitude);
+                    command.Parameters.AddWithValue("@Longitude", assignment.Longitude);
+
+                    await command.ExecuteNonQueryAsync();
+                }
+
+                // --- 2. Insert into SUBTASKS table ---
+                if (assignment.SubTasks != null && assignment.SubTasks.Any())
+                {
+                    foreach (var subtask in assignment.SubTasks)
+                    {
+                        using (var command = new SqlCommand(subtaskSql, connection, transaction))
+                        {
+                            // Add parameters for Subtasks table
+                            command.Parameters.AddWithValue("@PoiId", assignment.PoiId);
+                            command.Parameters.AddWithValue("@IconUrl", subtask.IconUrl ?? (object)DBNull.Value); // Handle null
+                            command.Parameters.AddWithValue("@Text", subtask.Text);
+
+                            await command.ExecuteNonQueryAsync();
+                        }
+                    }
+                }
+
+                // --- 3. Commit the transaction ---
+                transaction.Commit();
+                return true;
+            }
+            catch (SqlException ex)
+            {
+                // Rollback on failure
+                transaction.Rollback();
+                // Log the error
+                Console.WriteLine($"SQL Error during assignment creation: {ex.Message}");
+                throw; // Re-throw or handle as needed
+            }
+            catch (Exception ex)
+            {
+                transaction.Rollback();
+                Console.WriteLine($"Error during assignment creation: {ex.Message}");
+                throw;
+            }
+        }
+
+
         // Helper method to calculate counts
         private TaskCount CalculateTaskCounts(List<string> statuses)
         {

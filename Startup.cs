@@ -37,6 +37,7 @@ namespace StudentManagement
             services.AddControllers();
             services.AddScoped<IPOIService,PoiService>();
             services.AddScoped<IDashboardService,DashboardService>();
+            
             // services.AddSwaggerGen();
         }
 

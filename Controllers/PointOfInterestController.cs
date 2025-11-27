@@ -1,11 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Azure.Core;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
 using StudentManagement.Models;
 using StudentManagement.Repository;
 using StudentManagement.Services;
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace StudentManagement.Controllers
@@ -242,6 +247,37 @@ namespace StudentManagement.Controllers
 
             return Ok(response.Data);
 
+        }
+
+        [HttpPost("agent-details/create")]
+        public async Task<IActionResult> Create([FromBody] JsonElement payload)
+        {
+            try
+            {
+
+                if (payload.ValueKind == JsonValueKind.Undefined)
+                    return BadRequest("Invalid JSON");
+
+                string jsonString = payload.ToString();
+                JsonDocument doc = JsonDocument.Parse(jsonString);
+                JsonElement root = doc.RootElement;
+
+                // Simple field
+                int poiId = Convert.ToInt32(root.GetProperty("PoiId").ToString());
+                int agentID = Convert.ToInt32(root.GetProperty("AgentId").GetString());
+
+                var result =  await poiservice.InsertAgentAsync(jsonString, poiId, agentID);
+                return Ok(result);
+            }
+            catch (ArgumentException aex)
+            {
+                return BadRequest(aex.Message);
+            }
+            catch (Exception ex)
+            {
+                // log exception in real app
+                return StatusCode(500, "An error occurred while inserting the record: " + ex.Message);
+            }
         }
 
     }

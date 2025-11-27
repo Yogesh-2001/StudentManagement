@@ -114,5 +114,60 @@ namespace StudentManagement.Controllers
                 });
             }
         }
+
+        [HttpPost("create-poi")]
+        [ProducesResponseType(typeof(ServiceResponse<int>), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ServiceResponse<int>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ServiceResponse<int>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreatePoiAssignment([FromBody] PoiAssignmentInputDto assignment)
+        {
+            // Basic validation
+            if (!ModelState.IsValid || assignment.PoiId <= 0 || string.IsNullOrEmpty(assignment.AgentId))
+            {
+                return BadRequest(new ServiceResponse<int>
+                {
+                    Success = false,
+                    Message = "Invalid assignment data provided.",
+                    Data = 0
+                });
+            }
+
+            try
+            {
+                bool success = await dashboardService.CreatePoiAssignmentAsync(assignment);
+
+                if (success)
+                {
+                    // HTTP 201 Created is the standard response for successful creation
+                    return StatusCode(StatusCodes.Status201Created, new ServiceResponse<int>
+                    {
+                        Success = true,
+                        Message = $"POI assignment {assignment.PoiId} created successfully for agent {assignment.AgentId}.",
+                        Data = assignment.PoiId
+                    });
+                }
+
+                // This path is unlikely due to transaction/exception handling, but included for completeness
+                return BadRequest(new ServiceResponse<int>
+                {
+                    Success = false,
+                    Message = "Failed to create POI assignment due to an unknown error.",
+                    Data = 0
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log the exception
+                Console.WriteLine($"Creation Error: {ex.Message}");
+
+                // Return 500 Internal Server Error
+                return StatusCode(StatusCodes.Status500InternalServerError, new ServiceResponse<int>
+                {
+                    Success = false,
+                    Message = "An internal server error occurred during assignment creation.",
+                    Data = 0
+                });
+            }
+        }
     }
 }

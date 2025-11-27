@@ -1,11 +1,19 @@
-﻿using Microsoft.Data.SqlClient;
+﻿using Azure;
+using Azure.Core;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json.Linq;
 using StudentManagement.Models;
 using StudentManagement.Repository;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Data;
+using System.Data.Common;
+using System.Text;
 using System.Threading.Tasks;
+using System.Transactions;
+using System.Xml.Linq;
 
 namespace StudentManagement.Services
 {
@@ -127,6 +135,64 @@ namespace StudentManagement.Services
             return response;
         }
 
+
+        public async Task<ServiceResponse<object>> InsertAgentAsync(string payload, int poid, int agentid)
+        {
+            int insertedId;
+            var response = new ServiceResponse<object>();
+
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                await conn.OpenAsync();
+                SqlTransaction transaction = conn.BeginTransaction();
+                try
+                {
+                    string sql = "INSERT INTO AgentPoi (PoiRequest,POIid,AgentId) OUTPUT INSERTED.Id VALUES (@payload,@poid,@agentid)";
+                    
+                    SqlCommand cmd = new SqlCommand(sql, conn, transaction);
+                    cmd.Parameters.AddWithValue("@payload", payload);
+                    cmd.Parameters.AddWithValue("@poid", poid.ToString());
+                    cmd.Parameters.AddWithValue("@agentid", agentid.ToString());
+
+                    
+                    
+                    insertedId = (int)await cmd.ExecuteScalarAsync();
+
+                    string updateSql =
+                        @"UPDATE POIS
+                      SET taskStatus = @TaskStatus
+                      WHERE poiId = @PoiId AND agentId = @AgentId";
+
+                    SqlCommand updateCmd = new SqlCommand(updateSql, conn, transaction);
+                    updateCmd.Parameters.AddWithValue("@TaskStatus", "In Progress");
+                    updateCmd.Parameters.AddWithValue("@PoiId", poid.ToString());
+                    updateCmd.Parameters.AddWithValue("@AgentId", agentid.ToString());
+
+                    int rowsAffected = await updateCmd.ExecuteNonQueryAsync();
+
+                    if (rowsAffected == 0)
+                    {
+                        transaction.Rollback();
+                        return new ServiceResponse<object> { Data = null, Message = "Failed to add POI Detail", Success = false };
+                    }
+
+                    // Commit both insert + update
+                    transaction.Commit();
+
+                    return new ServiceResponse<object> { Data = insertedId, Message = "POI Details Stored Successfully", Success = true };
+
+                }
+                catch (Exception ex)
+                {
+                    return new ServiceResponse<object> { Data = null, Message = "Failed to add POI Detail :" + ex.Message.ToString(), Success = false };
+                }
+
+            }
+
+        }
+
+
         // Placeholder for Merchant lookup (must be implemented)
         private async Task<int> GetMerchantIdByMobileNoAsync(string? mobileNo)
         {
@@ -171,7 +237,7 @@ namespace StudentManagement.Services
             return merchantId;
         }
 
-       
+  
 
         // Placeholder for POI Status Update (must be implemented)
         private async Task UpdatePoiStatus(string? poiId, string status)
